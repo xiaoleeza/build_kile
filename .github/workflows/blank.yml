@@ -26,9 +26,9 @@ jobs:
           
     - name: Setup Craft  
       run: |  
-        git clone https://invent.kde.org/packaging/craft.git  
-        cd craft  
-        python3 setup.py --prefix ${{ github.workspace }}/craft-root  
+        git clone -b master https://invent.kde.org/packaging/craft.git  
+        cd craft/setup  
+        python3 CraftBootstrap.py --prefix ${{ github.workspace }}/craft-root  
           
     - name: Initialize Craft environment  
       run: |  
