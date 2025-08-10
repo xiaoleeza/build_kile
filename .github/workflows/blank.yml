@@ -1,4 +1,4 @@
-name: Build Kile for macOS  
+name: Build Kile for macOS with Craft  
   
 on:  
   push:  
@@ -18,89 +18,35 @@ jobs:
       uses: actions/checkout@v4  
       with:  
         repository: KDE/kile  
-        ref: master 
+        ref: master  
           
-    - name: Install basic dependencies  
+    - name: Install Python and basic tools  
       run: |  
-        brew update  
-        brew install cmake ninja qt6 extra-cmake-modules  
+        brew install python3 git  
           
-    - name: Set up environment  
+    - name: Setup Craft  
       run: |  
-        echo "CMAKE_PREFIX_PATH=$(brew --prefix qt6):$(brew --prefix extra-cmake-modules)" >> $GITHUB_ENV  
-        echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV  
+        git clone https://invent.kde.org/packaging/craft.git  
+        cd craft  
+        python3 setup.py --prefix ${{ github.workspace }}/craft-root  
           
-    - name: Create build directory  
-      run: mkdir build  
-        
-    - name: Configure with CMake  
-      working-directory: build  
+    - name: Initialize Craft environment  
       run: |  
-        cmake .. \  
-          -DCMAKE_BUILD_TYPE=Release \  
-          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \  
-          -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \  
-          -DAPPLE_SUPPRESS_X11_WARNING=ON \  
-          -GNinja  
-            
-    - name: Check CMake configuration  
-      working-directory: build  
-      run: |  
-        if [ ! -f build.ninja ]; then  
-          echo "CMake configuration failed - no build.ninja generated"  
-          cat CMakeFiles/CMakeError.log || echo "No CMakeError.log found"  
-          exit 1  
-        fi  
-        echo "CMake configuration successful"  
+        source ${{ github.workspace }}/craft-root/craft/bin/activate  
+        craft --add-blueprint-repository https://invent.kde.org/packaging/craft-blueprints-kde.git  
           
-    - name: Build Kile  
-      working-directory: build  
-      run: ninja -j$(sysctl -n hw.ncpu)  
-        
-    - name: Install Kile  
-      working-directory: build  
-      run: ninja install  
-        
-    - name: Create macOS app bundle  
+    - name: Build Kile with Craft  
       run: |  
-        mkdir -p Kile.app/Contents/MacOS  
-        mkdir -p Kile.app/Contents/Resources  
-        cp -r install/* Kile.app/Contents/  
+        source ${{ github.workspace }}/craft-root/craft/bin/activate  
+        craft kile  
           
-        # Create Info.plist based on CMake macOS bundle configuration  
-        cat > Kile.app/Contents/Info.plist << EOF  
-        <?xml version="1.0" encoding="UTF-8"?>  
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">  
-        <plist version="1.0">  
-        <dict>  
-            <key>CFBundleExecutable</key>  
-            <string>Kile</string>  
-            <key>CFBundleIdentifier</key>  
-            <string>org.kde.kile</string>  
-            <key>CFBundleName</key>  
-            <string>Kile</string>  
-            <key>CFBundleDisplayName</key>  
-            <string>Kile</string>  
-            <key>CFBundleInfoDictionaryVersion</key>  
-            <string>6.0</string>  
-            <key>CFBundlePackageType</key>  
-            <string>APPL</string>  
-        </dict>  
-        </plist>  
-        EOF  
-          
-    - name: Bundle dependencies with macdeployqt  
+    - name: Package Kile  
       run: |  
-        $(brew --prefix qt6)/bin/macdeployqt Kile.app -verbose=2  
-          
-    - name: Create DMG  
-      run: |  
-        hdiutil create -volname "Kile" -srcfolder Kile.app -ov -format UDZO Kile-macOS.dmg  
+        source ${{ github.workspace }}/craft-root/craft/bin/activate  
+        craft --package kile  
           
     - name: Upload build artifacts  
       uses: actions/upload-artifact@v4  
       with:  
-        name: kile-macos-build  
-        path: |  
-          Kile-macOS.dmg  
-          Kile.app
+        name: kile-macos-craft-build  
+        path: ${{ github.workspace }}/craft-root/tmp/
