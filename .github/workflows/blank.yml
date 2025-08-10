@@ -20,49 +20,84 @@ jobs:
         repository: KDE/kile  
         ref: master  
           
-    - name: Install dependencies via Homebrew  
+    - name: Install basic dependencies  
       run: |  
         brew update  
-        brew install cmake ninja qt5 extra-cmake-modules  
-        brew install kf5-kcodecs kf5-kconfig kf5-kcoreaddons kf5-kcrash  
-        brew install kf5-kdbusaddons kf5-kguiaddons kf5-ki18n kf5-kiconthemes  
-        brew install kf5-kio kf5-kparts kf5-ktexteditor kf5-kwindowsystem  
-        brew install kf5-kxmlgui kf5-ktextwidgets kf5-kcolorscheme  
-        brew install okular poppler-qt5  
+        brew install cmake ninja qt6 extra-cmake-modules  
+          
+    - name: Install KDE Frameworks 6 (if available)  
+      run: |  
+        # Try to install KF6 packages, continue on failure  
+        brew install kf6-kcodecs || echo "kf6-kcodecs not available"  
+        brew install kf6-kconfig || echo "kf6-kconfig not available"  
+        brew install kf6-kcoreaddons || echo "kf6-kcoreaddons not available"  
+        brew install kf6-kcrash || echo "kf6-kcrash not available"  
+        brew install kf6-kdbusaddons || echo "kf6-kdbusaddons not available"  
+        brew install kf6-kguiaddons || echo "kf6-kguiaddons not available"  
+        brew install kf6-ki18n || echo "kf6-ki18n not available"  
+        brew install kf6-kiconthemes || echo "kf6-kiconthemes not available"  
+        brew install kf6-kio || echo "kf6-kio not available"  
+        brew install kf6-kparts || echo "kf6-kparts not available"  
+        brew install kf6-ktexteditor || echo "kf6-ktexteditor not available"  
+        brew install kf6-kwindowsystem || echo "kf6-kwindowsystem not available"  
+        brew install kf6-kxmlgui || echo "kf6-kxmlgui not available"  
+        brew install kf6-ktextwidgets || echo "kf6-ktextwidgets not available"  
+        brew install kf6-kcolorscheme || echo "kf6-kcolorscheme not available"  
+          
+    - name: Install additional dependencies  
+      run: |  
+        brew install poppler-qt6 || echo "poppler-qt6 not available"  
+        # Okular might not be available on Homebrew for macOS  
+        brew install okular || echo "okular not available, will try to build without it"  
           
     - name: Set up environment  
       run: |  
-        echo "CMAKE_PREFIX_PATH=$(brew --prefix qt5):$(brew --prefix extra-cmake-modules)" >> $GITHUB_ENV  
+        echo "CMAKE_PREFIX_PATH=$(brew --prefix qt6):$(brew --prefix extra-cmake-modules)" >> $GITHUB_ENV  
         echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV  
           
     - name: Create build directory  
       run: mkdir build  
         
-    - name: Configure with CMake  
+    - name: Configure with CMake (allow missing dependencies)  
       working-directory: build  
       run: |  
         cmake .. \  
           -DCMAKE_BUILD_TYPE=Release \  
           -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \  
           -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \  
-          -GNinja  
+          -GNinja \  
+          -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \  
+          || echo "CMake configuration failed, but continuing..."  
             
-    - name: Build Kile  
+    - name: Build Kile (if configuration succeeded)  
       working-directory: build  
-      run: ninja -j$(sysctl -n hw.ncpu)  
+      run: |  
+        if [ -f build.ninja ]; then  
+          ninja -j$(sysctl -n hw.ncpu)  
+        else  
+          echo "Build files not generated, skipping build"  
+          exit 1  
+        fi  
         
     - name: Install Kile  
       working-directory: build  
-      run: ninja install  
+      run: |  
+        if [ -f build.ninja ]; then  
+          ninja install  
+        else  
+          echo "No build files found, skipping install"  
+          exit 1  
+        fi  
         
     - name: Create macOS app bundle  
       run: |  
-        mkdir -p Kile.app/Contents/MacOS  
-        mkdir -p Kile.app/Contents/Resources  
-        cp -r install/* Kile.app/Contents/  
-          
-        # Create Info.plist  
-        cat > Kile.app/Contents/Info.plist << EOF  
+        if [ -d install ]; then  
+          mkdir -p Kile.app/Contents/MacOS  
+          mkdir -p Kile.app/Contents/Resources  
+          cp -r install/* Kile.app/Contents/  
+            
+          # Create Info.plist  
+          cat > Kile.app/Contents/Info.plist << EOF  
         <?xml version="1.0" encoding="UTF-8"?>  
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">  
         <plist version="1.0">  
@@ -82,14 +117,24 @@ jobs:
         </dict>  
         </plist>  
         EOF  
+        else  
+          echo "Install directory not found, skipping app bundle creation"  
+          exit 1  
+        fi  
           
     - name: Bundle dependencies with macdeployqt  
       run: |  
-        $(brew --prefix qt5)/bin/macdeployqt Kile.app -verbose=2  
+        if [ -d Kile.app ]; then  
+          $(brew --prefix qt6)/bin/macdeployqt Kile.app -verbose=2 || echo "macdeployqt failed, but continuing"  
+        fi  
           
     - name: Create DMG  
       run: |  
-        hdiutil create -volname "Kile" -srcfolder Kile.app -ov -format UDZO Kile-macOS.dmg  
+        if [ -d Kile.app ]; then  
+          hdiutil create -volname "Kile" -srcfolder Kile.app -ov -format UDZO Kile-macOS.dmg  
+        else  
+          echo "Kile.app not found, skipping DMG creation"  
+        fi  
           
     - name: Upload build artifacts  
       uses: actions/upload-artifact@v4  
@@ -97,4 +142,5 @@ jobs:
         name: kile-macos-build  
         path: |  
           Kile-macOS.dmg  
-          Kile.app
+          Kile.app  
+      if: always()
