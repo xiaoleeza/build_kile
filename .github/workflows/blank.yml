@@ -18,7 +18,7 @@ jobs:
       uses: actions/checkout@v4  
       with:  
         repository: KDE/kile  
-        ref: main  
+        ref: master  
           
     - name: Install dependencies via Homebrew  
       run: |  
