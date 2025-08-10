@@ -1,35 +1,100 @@
-name: Build Kile on macOS
-
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  build:
-    runs-on: macos-latest
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Install Homebrew dependencies
-      run: |
-        brew update
-        brew install cmake qt5 kde-mac/kde/kf5-kconfig kde-mac/kde/kf5-kcoreaddons \
-                     kde-mac/kde/kf5-ki18n kde-mac/kde/kf5-kwindowsystem kde-mac/kde/kf5-kxmlgui
-
-    - name: Clone Kile source code
-      run: |
-        git clone https://invent.kde.org/office/kile.git
-        cd kile
-
-    - name: Build Kile
-      run: |
-        cd kile
-        mkdir build && cd build
-        cmake .. -DCMAKE_PREFIX_PATH=$(brew --prefix)/opt/qt@5
-        make -j$(sysctl -n hw.ncpu)
-        ls -l
+name: Build Kile for macOS  
+  
+on:  
+  push:  
+    branches:  
+      - main  
+  pull_request:  
+    branches:  
+      - main  
+  workflow_dispatch:  
+  
+jobs:  
+  build-macos:  
+    runs-on: macos-latest  
+      
+    steps:  
+    - name: Clone KDE/kile repository  
+      uses: actions/checkout@v4  
+      with:  
+        repository: KDE/kile  
+        ref: main  
+          
+    - name: Install dependencies via Homebrew  
+      run: |  
+        brew update  
+        brew install cmake ninja qt6 extra-cmake-modules  
+        brew install kf6-kcodecs kf6-kconfig kf6-kcoreaddons kf6-kcrash  
+        brew install kf6-kdbusaddons kf6-kguiaddons kf6-ki18n kf6-kiconthemes  
+        brew install kf6-kio kf6-kparts kf6-ktexteditor kf6-kwindowsystem  
+        brew install kf6-kxmlgui kf6-ktextwidgets kf6-kcolorscheme  
+        brew install okular poppler-qt6  
+          
+    - name: Set up environment  
+      run: |  
+        echo "CMAKE_PREFIX_PATH=$(brew --prefix qt6):$(brew --prefix extra-cmake-modules)" >> $GITHUB_ENV  
+        echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV  
+          
+    - name: Create build directory  
+      run: mkdir build  
+        
+    - name: Configure with CMake  
+      working-directory: build  
+      run: |  
+        cmake .. \  
+          -DCMAKE_BUILD_TYPE=Release \  
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install \  
+          -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \  
+          -GNinja  
+            
+    - name: Build Kile  
+      working-directory: build  
+      run: ninja -j$(sysctl -n hw.ncpu)  
+        
+    - name: Install Kile  
+      working-directory: build  
+      run: ninja install  
+        
+    - name: Create macOS app bundle  
+      run: |  
+        mkdir -p Kile.app/Contents/MacOS  
+        mkdir -p Kile.app/Contents/Resources  
+        cp -r install/* Kile.app/Contents/  
+          
+        # Create Info.plist  
+        cat > Kile.app/Contents/Info.plist << EOF  
+        <?xml version="1.0" encoding="UTF-8"?>  
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">  
+        <plist version="1.0">  
+        <dict>  
+            <key>CFBundleExecutable</key>  
+            <string>Kile</string>  
+            <key>CFBundleIdentifier</key>  
+            <string>org.kde.kile</string>  
+            <key>CFBundleName</key>  
+            <string>Kile</string>  
+            <key>CFBundleDisplayName</key>  
+            <string>Kile</string>  
+            <key>CFBundleInfoDictionaryVersion</key>  
+            <string>6.0</string>  
+            <key>CFBundlePackageType</key>  
+            <string>APPL</string>  
+        </dict>  
+        </plist>  
+        EOF  
+          
+    - name: Bundle dependencies with macdeployqt  
+      run: |  
+        $(brew --prefix qt6)/bin/macdeployqt Kile.app -verbose=2  
+          
+    - name: Create DMG  
+      run: |  
+        hdiutil create -volname "Kile" -srcfolder Kile.app -ov -format UDZO Kile-macOS.dmg  
+          
+    - name: Upload build artifacts  
+      uses: actions/upload-artifact@v4  
+      with:  
+        name: kile-macos-build  
+        path: |  
+          Kile-macOS.dmg  
+          Kile.app
