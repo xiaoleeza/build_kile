@@ -23,16 +23,16 @@ jobs:
     - name: Install dependencies via Homebrew  
       run: |  
         brew update  
-        brew install cmake ninja qt6 extra-cmake-modules  
-        brew install kf6-kcodecs kf6-kconfig kf6-kcoreaddons kf6-kcrash  
-        brew install kf6-kdbusaddons kf6-kguiaddons kf6-ki18n kf6-kiconthemes  
-        brew install kf6-kio kf6-kparts kf6-ktexteditor kf6-kwindowsystem  
-        brew install kf6-kxmlgui kf6-ktextwidgets kf6-kcolorscheme  
-        brew install okular poppler-qt6  
+        brew install cmake ninja qt5 extra-cmake-modules  
+        brew install kf5-kcodecs kf5-kconfig kf5-kcoreaddons kf5-kcrash  
+        brew install kf5-kdbusaddons kf5-kguiaddons kf5-ki18n kf5-kiconthemes  
+        brew install kf5-kio kf5-kparts kf5-ktexteditor kf5-kwindowsystem  
+        brew install kf5-kxmlgui kf5-ktextwidgets kf5-kcolorscheme  
+        brew install okular poppler-qt5  
           
     - name: Set up environment  
       run: |  
-        echo "CMAKE_PREFIX_PATH=$(brew --prefix qt6):$(brew --prefix extra-cmake-modules)" >> $GITHUB_ENV  
+        echo "CMAKE_PREFIX_PATH=$(brew --prefix qt5):$(brew --prefix extra-cmake-modules)" >> $GITHUB_ENV  
         echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> $GITHUB_ENV  
           
     - name: Create build directory  
@@ -85,7 +85,7 @@ jobs:
           
     - name: Bundle dependencies with macdeployqt  
       run: |  
-        $(brew --prefix qt6)/bin/macdeployqt Kile.app -verbose=2  
+        $(brew --prefix qt5)/bin/macdeployqt Kile.app -verbose=2  
           
     - name: Create DMG  
       run: |  
